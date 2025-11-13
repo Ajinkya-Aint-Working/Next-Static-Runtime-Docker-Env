@@ -46,6 +46,8 @@ Result:
 ├── docker-compose.yml
 ├── entrypoint.sh
 ├── env.template.js
+├── types
+│    └── env.d.ts
 └── public/
     └── ... (Next.js static files)
 ```
@@ -132,12 +134,35 @@ envsubst < /usr/share/nginx/html/env.template.js > /usr/share/nginx/html/env.js
 exec "$@"
 ```
 
-This script:
+---
 
-- Reads env.template.js
-- Substitutes variables with actual runtime env values
-- Outputs final `/env.js`
-- Starts Nginx
+## 🧩 TypeScript Support (`env.d.ts`)
+
+Since we are accessing runtime variables using `window.env`, TypeScript needs to know that this object exists.
+
+Create a file named **`env.d.ts`** in the project root:
+
+```ts
+export {};
+
+declare global {
+  interface Window {
+    env: {
+      API_URL: string;
+      NODE_ENV: string;
+      [key: string]: string;
+    };
+  }
+}
+```
+
+This prevents:
+
+```
+Property 'env' does not exist on type 'Window'.
+```
+
+Now TypeScript fully understands `window.env.API_URL`.
 
 ---
 
@@ -154,8 +179,6 @@ This ensures `window.env` loads before your Next.js app executes.
 ---
 
 ## 🎯 Using Runtime Env In Your Next.js App
-
-You can read runtime values like this:
 
 ```tsx
 "use client";
@@ -185,8 +208,6 @@ services:
       - NODE_ENV=production
 ```
 
-Change values anytime — NO rebuild required.
-
 ---
 
 ## 🏗 Run the App
@@ -212,31 +233,28 @@ http://localhost:8000
 
 | Feature | Explanation |
 |--------|-------------|
-| Static export | Produces pure HTML/JS bundle served by Nginx |
-| No Node server | Everything runs client-side |
+| Static export | Pure HTML/JS bundle served by Nginx |
+| No Node server | Fully client-side rendering |
 | Runtime env.js | Injects environment variables dynamically |
 | Docker entrypoint | Generates `env.js` every time container starts |
-| No rebuild needed | Change env values in docker-compose only |
+| No rebuild needed | Env values changed via docker-compose |
 
 ---
 
 ## 🧪 Adding New Env Variables
 
-1. Add them to `env.template.js`:
-
+1. Add to `env.template.js`:
 ```js
 MY_KEY: "$MY_KEY"
 ```
 
-2. Add them to `docker-compose.yml`:
-
+2. Add to `docker-compose.yml`:
 ```yaml
 environment:
   - MY_KEY=12345
 ```
 
-3. Use them in your Next.js code:
-
+3. Use in Next.js:
 ```tsx
 console.log(window.env.MY_KEY)
 ```
@@ -247,22 +265,13 @@ No rebuild required.
 
 ## 🏁 Conclusion
 
-This is a fully optimized deployment workflow for Next.js 16 static export with Docker and Nginx, supporting true **runtime environment variables** using a clean and scalable pattern.
-
-You can now:
-
-- Deploy the SAME image everywhere  
-- Change env variables instantly  
-- Keep builds portable and clean  
-- Use Nginx reliably for static delivery  
+This setup is production-grade and provides full runtime configuration support for Next.js static export deployments. Reuse the same Docker image for any environment and inject values dynamically.
 
 ---
 
 ## ⭐ Optional Enhancements
 
 - Add Nginx caching headers  
-- Add gzip/brotli compression  
-- Add healthcheck endpoints  
-- Deploy via CI/CD  
-
-This setup is production-ready and easy to extend.
+- Enable gzip/brotli compression  
+- Add health checks  
+- Integrate CI/CD
