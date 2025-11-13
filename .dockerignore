@@ -1,0 +1,59 @@
+# Ignore node_modules (installed inside container)
+node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Ignore local environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Ignore Next.js build files
+.next/
+out/
+dist/
+build/
+
+# Ignore logs
+*.log
+logs/
+debug.log
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
+
+# Ignore editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore Git
+.git
+.gitignore
+.gitattributes
+
+# Ignore Docker artifacts
+Dockerfile*
+docker-compose*
+*.tar
+
+# Ignore test output
+coverage/
+*.test.js
+*.spec.js
+
+# Ignore local temp/cache
+*.pid
+*.seed
+*.tgz
+.cache/
+.temp/
+
+# Ignore Markdown previews or temp docs
+*.md~

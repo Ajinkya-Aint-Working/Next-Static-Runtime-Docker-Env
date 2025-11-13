@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  nextapp:
+    build: .
+    container_name: next-static
+    ports:
+      - "8000:80"
+    environment:
+      - API_URL=https://api.production.com
+      - NODE_ENV=production
