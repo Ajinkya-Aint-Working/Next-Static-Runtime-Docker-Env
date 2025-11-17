@@ -2,7 +2,7 @@
 # 🌍 General Server Configuration
 # =========================================================
 server_name: "test.finrius.com"       # 🔸 Your domain name (DNS must point to VM public IP)
-email: "admin@example.com"             # 🔸 Email for Let's Encrypt (expiry & renewal notices)
+email: "ajinkya.acharekar@finrius.com"             # 🔸 Email for Let's Encrypt (expiry & renewal notices)
 
 # =========================================================
 # 🐋 Docker Configuration
