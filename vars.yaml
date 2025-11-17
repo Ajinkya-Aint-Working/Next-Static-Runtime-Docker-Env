@@ -1,0 +1,33 @@
+# =========================================================
+# 🌍 General Server Configuration
+# =========================================================
+server_name: "test.finrius.com"       # 🔸 Your domain name (DNS must point to VM public IP)
+email: "admin@example.com"             # 🔸 Email for Let's Encrypt (expiry & renewal notices)
+
+# =========================================================
+# 🐋 Docker Configuration
+# =========================================================
+compose_project_path: "/opt/myapp"     # Directory where docker-compose.yml will be placed
+app_image: "nginxdemos/hello:plain-text"              # Image for your main application container
+app_container_name: "myapp"            # Name for the main app container
+app_port: 8000                         # Port exposed by your app inside the container
+
+# You can add more services (e.g., db_image, redis_image) if needed
+# db_image: "mongo:7"
+# db_container_name: "mongodb"
+
+# =========================================================
+# 🔒 Certbot + HTTPS Configuration
+# =========================================================
+certbot_webroot_path: "/var/www/html"  # Path for Certbot HTTP-01 challenge (must match Nginx config)
+certbot_method: "webroot"              # Authenticator method (use dns-* if automating DNS validation)
+cert_renewal_force: false              # Set to true to force renewal even if cert is valid
+
+# =========================================================
+# 🌐 Nginx Configuration
+# =========================================================
+nginx_sites_available: "/etc/nginx/sites-available"
+nginx_sites_enabled: "/etc/nginx/sites-enabled"
+nginx_ssl_dir: "/etc/letsencrypt/live/{{ server_name }}"
+nginx_access_log: "/var/log/nginx/{{ server_name }}.access.log"
+nginx_error_log: "/var/log/nginx/{{ server_name }}.error.log"
