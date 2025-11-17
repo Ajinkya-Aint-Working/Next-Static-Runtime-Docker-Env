@@ -155,7 +155,7 @@ jobs:
       # ---------------------------------------------------------
       - name: Run Ansible Playbook
         run: |
-          cd /tmp/infra/tls-nginx-deploy
+          cd /tmp/infra/
 
           chmod 600 ansible.cfg
           chmod 700 .
