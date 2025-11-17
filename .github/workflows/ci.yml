@@ -106,7 +106,7 @@ jobs:
       # ---------------------------------------------------------
       - name: Create Dynamic Inventory
         run: |
-          INVENTORY="/tmp/infra/tls-nginx-deploy/inventory.ini"
+          INVENTORY="/tmp/infra/inventory.ini"
 
           cat <<EOF > $INVENTORY
           [web]
