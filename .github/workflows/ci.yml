@@ -1,11 +1,165 @@
-name: Docker Image CI
+name: Ansible Deploy to GCP VM
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      vm_ip:
+        description: "Enter the GCP VM Public IP (IPv4)"
+        required: true
+        type: string
 
 jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-  build:
+    steps:
+      # -----------------------------
+      # CHECKOUT MAIN REPO
+      # -----------------------------
+      - name: Checkout Application Repo
+        uses: actions/checkout@v3
+
+      # -----------------------------
+      # VALIDATE IP FORMAT
+      # -----------------------------
+      - name: Validate VM IP format
+        run: |
+          IP="${{ github.event.inputs.vm_ip }}"
+          echo "Validating IP: $IP"
+
+          if [[ ! $IP =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "❌ Invalid IP format"
+            exit 1
+          fi
+
+          OIFS=$IFS; IFS='.' read -r o1 o2 o3 o4 <<< "$IP"; IFS=$OIFS
+          for octet in $o1 $o2 $o3 $o4; do
+            if (( octet < 0 || octet > 255 )); then
+              echo "❌ Invalid octet '$octet'. Must be 0–255"
+              exit 1
+            fi
+          done
+
+          echo "✔ Valid IPv4 address"
+
+      # -----------------------------
+      # PREPARE SSH KEY
+      # -----------------------------
+      - name: Prepare SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      # -----------------------------
+      # CLONE INFRA REPO TO /tmp/infra
+      # -----------------------------
+      - name: Clone Infra Repo
+        run: |
+          git clone "${{ secrets.INFRA_REPO_URL }}" /tmp/infra
+          echo "✔ Infra repo cloned to /tmp/infra"
+
+      # -----------------------------
+      # REPLACE TEMPLATES
+      # -----------------------------
+      - name: Replace TLS NGINX Templates
+        run: |
+          ROLE_PATH="/tmp/infra/tls-nginx-deploy/templates"
+          mkdir -p "$ROLE_PATH"
+
+          echo "Replacing docker-compose template..."
+          if [ -f docker-compose.yaml ]; then cp docker-compose.yaml "$ROLE_PATH/docker-compose.yaml.j2"; fi
+          if [ -f docker-compose.yml ]; then cp docker-compose.yml "$ROLE_PATH/docker-compose.yaml.j2"; fi
+          if [ -f docker-compose.yaml.j2 ]; then cp docker-compose.yaml.j2 "$ROLE_PATH/docker-compose.yaml.j2"; fi
+
+          echo "Replacing nginx.conf template..."
+          if [ -f nginx.conf ]; then cp nginx.conf "$ROLE_PATH/nginx.conf.j2"; fi
+          if [ -f nginx.conf.j2 ]; then cp nginx.conf.j2 "$ROLE_PATH/nginx.conf.j2"; fi
+
+          chmod 600 "$ROLE_PATH"/* || true
+
+          echo "Final template contents:"
+          ls -la "$ROLE_PATH"
+
+      # -----------------------------
+      # COPY vars.yaml -> vars/main.yaml
+      # -----------------------------
+      - name: Replace Role Variables (vars.yaml → vars/main.yaml)
+        run: |
+          ROLE_VARS="/tmp/infra/tls-nginx-deploy/vars"
+          mkdir -p "$ROLE_VARS"
+
+          echo "Checking for vars.yaml in repo root..."
+          if [ -f vars.yaml ]; then
+            cp vars.yaml "$ROLE_VARS/main.yaml"
+            echo "✔ Copied vars.yaml → $ROLE_VARS/main.yaml"
+          else
+            echo "⚠ vars.yaml not found in repo root"
+          fi
+
+          chmod 600 "$ROLE_VARS/main.yaml" || true
+
+          echo "Contents of main.yaml:"
+          cat "$ROLE_VARS/main.yaml" || echo "⚠ main.yaml missing"
+
+      # -----------------------------
+      # CREATE INVENTORY WITH VM IP
+      # -----------------------------
+      - name: Create Dynamic Inventory
+        run: |
+          INVENTORY="/tmp/infra/inventory.ini"
+          echo "[web]" > $INVENTORY
+          echo "vm1 ansible_host=${{ github.event.inputs.vm_ip }}" >> $INVENTORY
+
+          chmod 600 $INVENTORY
+          echo "✔ Inventory created:"
+          cat $INVENTORY
+
+      # -----------------------------
+      # INSTALL ANSIBLE
+      # -----------------------------
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible sshpass
+
+      # -----------------------------
+      # WAIT FOR SSH READY
+      # -----------------------------
+      - name: Wait for SSH Availability
+        run: |
+          IP="${{ github.event.inputs.vm_ip }}"
+          echo "Waiting for SSH on $IP..."
+
+          for i in {1..30}; do
+            if ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@$IP "echo ok" 2>/dev/null; then
+              echo "✔ SSH is ready!"
+              exit 0
+            fi
+            echo "Attempt $i/30 → still waiting..."
+            sleep 5
+          done
+
+          echo "❌ SSH not ready"
+          exit 1
+
+      # -----------------------------
+      # LIST SECRETS BEING USED
+      # -----------------------------
+      - name: List Secrets Used (Safe listing only)
+        run: |
+          echo "SECRETS USED IN WORKFLOW:"
+          echo "- SSH_PRIVATE_KEY"
+          echo "- INFRA_REPO_URL"
+          echo "- SSH_USER"
+
+      # -----------------------------
+      # RUN ANSIBLE PLAYBOOK
+      # -----------------------------
+      - name: Run Ansible Playbook
+        run: |
+          ansible-playbook \
+            -i /tmp/infra/inventory.ini \
+            /tmp/infra/playbook.yml \
+            --user "${{ secrets.SSH_USER }}" \
+            --ssh-common-args='-o StrictHostKeyChecking=no'
