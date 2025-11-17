@@ -13,15 +13,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # -----------------------------
-      # CHECKOUT MAIN REPO
-      # -----------------------------
+      # ---------------------------------------------------------
+      # CHECKOUT APPLICATION REPO
+      # ---------------------------------------------------------
       - name: Checkout Application Repo
         uses: actions/checkout@v3
 
-      # -----------------------------
+      # ---------------------------------------------------------
       # VALIDATE IP FORMAT
-      # -----------------------------
+      # ---------------------------------------------------------
       - name: Validate VM IP format
         run: |
           IP="${{ github.event.inputs.vm_ip }}"
@@ -42,30 +42,33 @@ jobs:
 
           echo "✔ Valid IPv4 address"
 
-      # -----------------------------
+      # ---------------------------------------------------------
       # PREPARE SSH KEY
-      # -----------------------------
+      # ---------------------------------------------------------
       - name: Prepare SSH Key
         run: |
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      # -----------------------------
-      # CLONE INFRA REPO TO /tmp/infra
-      # -----------------------------
+      # ---------------------------------------------------------
+      # CLONE INFRA REPO
+      # ---------------------------------------------------------
       - name: Clone Infra Repo
         run: |
           git clone "${{ secrets.INFRA_REPO_URL }}" /tmp/infra
-          echo "✔ Infra repo cloned to /tmp/infra"
+          chmod 700 /tmp/infra
+          echo "✔ Infra repo cloned"
 
-      # -----------------------------
-      # REPLACE TEMPLATES
-      # -----------------------------
+      # ---------------------------------------------------------
+      # REPLACE TEMPLATES (docker-compose + nginx)
+      # ---------------------------------------------------------
       - name: Replace TLS NGINX Templates
         run: |
           ROLE_PATH="/tmp/infra/tls-nginx-deploy/templates"
           mkdir -p "$ROLE_PATH"
+          chmod 700 "$ROLE_PATH"
 
           echo "Replacing docker-compose template..."
           if [ -f docker-compose.yaml ]; then cp docker-compose.yaml "$ROLE_PATH/docker-compose.yaml.j2"; fi
@@ -78,54 +81,54 @@ jobs:
 
           chmod 600 "$ROLE_PATH"/* || true
 
-          echo "Final template contents:"
+          echo "Templates updated:"
           ls -la "$ROLE_PATH"
 
-      # -----------------------------
-      # COPY vars.yaml -> vars/main.yaml
-      # -----------------------------
-      - name: Replace Role Variables (vars.yaml → vars/main.yaml)
+      # ---------------------------------------------------------
+      # COPY vars.yaml → vars/main.yaml
+      # ---------------------------------------------------------
+      - name: Replace Role Variables
         run: |
           ROLE_VARS="/tmp/infra/tls-nginx-deploy/vars"
           mkdir -p "$ROLE_VARS"
+          chmod 700 "$ROLE_VARS"
 
-          echo "Checking for vars.yaml in repo root..."
           if [ -f vars.yaml ]; then
             cp vars.yaml "$ROLE_VARS/main.yaml"
-            echo "✔ Copied vars.yaml → $ROLE_VARS/main.yaml"
+            chmod 600 "$ROLE_VARS/main.yaml"
+            echo "✔ vars.yaml → vars/main.yaml"
           else
-            echo "⚠ vars.yaml not found in repo root"
+            echo "⚠ vars.yaml not found"
           fi
 
-          chmod 600 "$ROLE_VARS/main.yaml" || true
-
-          echo "Contents of main.yaml:"
-          cat "$ROLE_VARS/main.yaml" || echo "⚠ main.yaml missing"
-
-      # -----------------------------
-      # CREATE INVENTORY WITH VM IP
-      # -----------------------------
+      # ---------------------------------------------------------
+      # CREATE INVENTORY INSIDE ROLE (CLEAN OVERRIDE)
+      # ---------------------------------------------------------
       - name: Create Dynamic Inventory
         run: |
-          INVENTORY="/tmp/infra/inventory.ini"
-          echo "[web]" > $INVENTORY
-          echo "vm1 ansible_host=${{ github.event.inputs.vm_ip }}" >> $INVENTORY
+          INVENTORY="/tmp/infra/tls-nginx-deploy/inventory.ini"
+
+          cat <<EOF > $INVENTORY
+          [web]
+          vm1 ansible_host=${{ github.event.inputs.vm_ip }}
+          EOF
 
           chmod 600 $INVENTORY
-          echo "✔ Inventory created:"
+
+          echo "✔ Dynamic inventory created at $INVENTORY"
           cat $INVENTORY
 
-      # -----------------------------
+      # ---------------------------------------------------------
       # INSTALL ANSIBLE
-      # -----------------------------
+      # ---------------------------------------------------------
       - name: Install Ansible
         run: |
           sudo apt-get update
           sudo apt-get install -y ansible sshpass
 
-      # -----------------------------
+      # ---------------------------------------------------------
       # WAIT FOR SSH READY
-      # -----------------------------
+      # ---------------------------------------------------------
       - name: Wait for SSH Availability
         run: |
           IP="${{ github.event.inputs.vm_ip }}"
@@ -143,23 +146,20 @@ jobs:
           echo "❌ SSH not ready"
           exit 1
 
-      # -----------------------------
-      # LIST SECRETS BEING USED
-      # -----------------------------
-      - name: List Secrets Used (Safe listing only)
-        run: |
-          echo "SECRETS USED IN WORKFLOW:"
-          echo "- SSH_PRIVATE_KEY"
-          echo "- INFRA_REPO_URL"
-          echo "- SSH_USER"
 
-      # -----------------------------
-      # RUN ANSIBLE PLAYBOOK
-      # -----------------------------
+      # ---------------------------------------------------------
+      # RUN ANSIBLE PLAYBOOK (uses ansible.cfg inside role)
+      # ---------------------------------------------------------
       - name: Run Ansible Playbook
         run: |
+          cd /tmp/infra/tls-nginx-deploy
+
+          chmod 600 ansible.cfg
+          chmod 700 .
+
+          echo "Using ansible.cfg from:"
+          pwd
+
           ansible-playbook \
-            -i /tmp/infra/inventory.ini \
-            /tmp/infra/playbook.yml \
-            --user "${{ secrets.SSH_USER }}" \
+            ./playbook.yaml \
             --ssh-common-args='-o StrictHostKeyChecking=no'
