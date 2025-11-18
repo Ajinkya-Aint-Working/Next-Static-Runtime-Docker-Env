@@ -94,9 +94,9 @@ jobs:
           chmod 700 "$ROLE_VARS"
 
           if [ -f vars.yaml ]; then
-            cp vars.yaml "$ROLE_VARS/main.yaml"
-            chmod 600 "$ROLE_VARS/main.yaml"
-            echo "✔ vars.yaml → vars/main.yaml"
+            cp vars.yaml "$ROLE_VARS/main.yml"
+            chmod 600 "$ROLE_VARS/main.yml"
+            echo "✔ vars.yaml → vars/main.yml"
           else
             echo "⚠ vars.yaml not found"
           fi
